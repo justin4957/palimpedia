@@ -74,7 +74,7 @@ defmodule Palimpedia.Test.MockGraphRepo do
      }}
   end
 
-  def find_orphans(opts) do
+  def find_orphans(_opts) do
     {:ok, []}
   end
 
