@@ -1,7 +1,10 @@
 defmodule Palimpedia.Graph.Neo4jRepository do
   @moduledoc """
   Neo4j implementation of the graph repository.
-  Uses Bolt.Sips for connection management.
+
+  Uses Bolt.Sips for connection management. All queries use parameterized
+  Cypher to prevent injection. Node and relationship IDs are Neo4j internal
+  integer IDs accessed via the Bolt.Sips.Types structs.
   """
 
   @behaviour Palimpedia.Graph.Repository
@@ -20,86 +23,104 @@ defmodule Palimpedia.Graph.Neo4jRepository do
       anchor_distance: $anchor_distance,
       generated_at: $generated_at
     })
-    RETURN n, elementId(n) AS id
+    RETURN n
     """
 
-    params = %{
-      title: node.title,
-      content: node.content,
-      node_type: Atom.to_string(node.node_type),
-      confidence: node.confidence,
-      provenance: node.provenance,
-      anchor_distance: node.anchor_distance,
-      generated_at: node.generated_at && DateTime.to_iso8601(node.generated_at)
-    }
+    params = node_to_params(node)
 
-    case Bolt.Sips.query(Bolt.Sips.conn(), query, params) do
-      {:ok, response} ->
-        [row] = response.results
-        {:ok, %{node | id: row["id"]}}
-
-      {:error, reason} ->
-        {:error, reason}
+    with {:ok, response} <- execute(query, params),
+         [%{"n" => neo4j_node}] <- response.results do
+      {:ok, neo4j_node_to_struct(neo4j_node)}
+    else
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, :unexpected_response}
     end
   end
 
   @impl true
-  def get_node(node_id) do
+  def get_node(node_id) when is_integer(node_id) do
     query = """
     MATCH (n:Document)
-    WHERE elementId(n) = $id
-    RETURN n, elementId(n) AS id
+    WHERE id(n) = $id
+    RETURN n
     """
 
-    case Bolt.Sips.query(Bolt.Sips.conn(), query, %{id: node_id}) do
-      {:ok, %{results: [row]}} -> {:ok, row_to_node(row)}
-      {:ok, %{results: []}} -> {:error, :not_found}
-      {:error, reason} -> {:error, reason}
+    with {:ok, response} <- execute(query, %{id: node_id}) do
+      case response.results do
+        [%{"n" => neo4j_node}] -> {:ok, neo4j_node_to_struct(neo4j_node)}
+        [] -> {:error, :not_found}
+      end
     end
   end
 
   @impl true
   def insert_edge(%Edge{} = edge) do
-    edge_label = edge.edge_type |> Atom.to_string() |> String.upcase()
+    with :ok <- validate_edge_type(edge.edge_type) do
+      edge_label = edge.edge_type |> Atom.to_string() |> String.upcase()
 
-    query = """
-    MATCH (a:Document), (b:Document)
-    WHERE elementId(a) = $source_id AND elementId(b) = $target_id
-    CREATE (a)-[r:#{edge_label} {
-      confidence: $confidence,
-      provenance: $provenance
-    }]->(b)
-    RETURN elementId(r) AS id
-    """
+      # Cypher doesn't allow parameterized relationship types, so we
+      # interpolate the validated label. Edge types are from a fixed
+      # vocabulary so this is safe from injection.
+      query = """
+      MATCH (a:Document), (b:Document)
+      WHERE id(a) = $source_id AND id(b) = $target_id
+      CREATE (a)-[r:#{edge_label} {
+        confidence: $confidence,
+        provenance: $provenance
+      }]->(b)
+      RETURN r
+      """
 
-    params = %{
-      source_id: edge.source_id,
-      target_id: edge.target_id,
-      confidence: edge.confidence,
-      provenance: edge.provenance
-    }
+      params = %{
+        source_id: edge.source_id,
+        target_id: edge.target_id,
+        confidence: edge.confidence,
+        provenance: edge.provenance
+      }
 
-    case Bolt.Sips.query(Bolt.Sips.conn(), query, params) do
-      {:ok, %{results: [row]}} -> {:ok, %{edge | id: row["id"]}}
-      {:error, reason} -> {:error, reason}
+      with {:ok, response} <- execute(query, params),
+           [%{"r" => neo4j_rel}] <- response.results do
+        {:ok, neo4j_rel_to_edge(neo4j_rel)}
+      else
+        {:ok, %{results: []}} -> {:error, :nodes_not_found}
+        {:error, reason} -> {:error, reason}
+        _ -> {:error, :unexpected_response}
+      end
     end
   end
 
   @impl true
-  def subgraph(node_id, hops \\ 2) do
+  def subgraph(node_id, hops \\ 2) when is_integer(node_id) and hops > 0 do
     query = """
-    MATCH path = (start:Document)-[*1..#{hops}]-(neighbor:Document)
-    WHERE elementId(start) = $id
-    RETURN nodes(path) AS nodes, relationships(path) AS rels
+    MATCH (start:Document)
+    WHERE id(start) = $id
+    OPTIONAL MATCH path = (start)-[*1..#{hops}]-(neighbor:Document)
+    WITH start, collect(nodes(path)) AS all_node_lists, collect(relationships(path)) AS all_rel_lists
+    RETURN start,
+           reduce(acc = [], ns IN all_node_lists | acc + ns) AS nodes,
+           reduce(acc = [], rs IN all_rel_lists | acc + rs) AS rels
     """
 
-    case Bolt.Sips.query(Bolt.Sips.conn(), query, %{id: node_id}) do
-      {:ok, response} ->
-        {nodes, edges} = extract_subgraph(response.results)
-        {:ok, nodes, edges}
+    with {:ok, response} <- execute(query, %{id: node_id}) do
+      case response.results do
+        [%{"start" => start_node, "nodes" => raw_nodes, "rels" => raw_rels}] ->
+          nodes =
+            [start_node | raw_nodes || []]
+            |> Enum.filter(&is_struct(&1, Bolt.Sips.Types.Node))
+            |> Enum.uniq_by(& &1.id)
+            |> Enum.map(&neo4j_node_to_struct/1)
 
-      {:error, reason} ->
-        {:error, reason}
+          edges =
+            (raw_rels || [])
+            |> Enum.filter(&is_struct(&1, Bolt.Sips.Types.Relationship))
+            |> Enum.uniq_by(& &1.id)
+            |> Enum.map(&neo4j_rel_to_edge/1)
+
+          {:ok, nodes, edges}
+
+        [] ->
+          {:error, :not_found}
+      end
     end
   end
 
@@ -110,13 +131,16 @@ defmodule Palimpedia.Graph.Neo4jRepository do
     query = """
     MATCH (n:Document)
     WHERE n.title CONTAINS $query
-    RETURN n, elementId(n) AS id
+    RETURN n
+    ORDER BY n.confidence DESC
     LIMIT $limit
     """
 
-    case Bolt.Sips.query(Bolt.Sips.conn(), query, %{query: query_text, limit: limit}) do
-      {:ok, response} -> {:ok, Enum.map(response.results, &row_to_node/1)}
-      {:error, reason} -> {:error, reason}
+    with {:ok, response} <- execute(query, %{query: query_text, limit: limit}) do
+      nodes =
+        Enum.map(response.results, fn %{"n" => neo4j_node} -> neo4j_node_to_struct(neo4j_node) end)
+
+      {:ok, nodes}
     end
   end
 
@@ -127,39 +151,87 @@ defmodule Palimpedia.Graph.Neo4jRepository do
     query = """
     MATCH (n:Document)
     WHERE NOT (n)--()
-    RETURN n, elementId(n) AS id
+    RETURN n
     LIMIT $limit
     """
 
-    case Bolt.Sips.query(Bolt.Sips.conn(), query, %{limit: limit}) do
-      {:ok, response} -> {:ok, Enum.map(response.results, &row_to_node/1)}
+    with {:ok, response} <- execute(query, %{limit: limit}) do
+      nodes =
+        Enum.map(response.results, fn %{"n" => neo4j_node} -> neo4j_node_to_struct(neo4j_node) end)
+
+      {:ok, nodes}
+    end
+  end
+
+  @impl true
+  def delete_all do
+    query = "MATCH (n) DETACH DELETE n"
+
+    case execute(query) do
+      {:ok, _} -> :ok
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp row_to_node(%{"n" => props, "id" => node_id}) do
-    %Node{
-      id: node_id,
-      title: props["title"],
-      content: props["content"],
-      node_type: String.to_existing_atom(props["node_type"]),
-      confidence: props["confidence"],
-      provenance: props["provenance"] || [],
-      anchor_distance: props["anchor_distance"]
+  # --- Private helpers ---
+
+  defp execute(query, params \\ %{}) do
+    conn = Bolt.Sips.conn()
+    Bolt.Sips.query(conn, query, params)
+  end
+
+  defp node_to_params(%Node{} = node) do
+    %{
+      title: node.title,
+      content: node.content,
+      node_type: Atom.to_string(node.node_type),
+      confidence: node.confidence,
+      provenance: node.provenance,
+      anchor_distance: node.anchor_distance,
+      generated_at: if(node.generated_at, do: DateTime.to_iso8601(node.generated_at))
     }
   end
 
-  defp extract_subgraph(rows) do
-    nodes =
-      rows
-      |> Enum.flat_map(& &1["nodes"])
-      |> Enum.uniq_by(& &1.id)
+  defp neo4j_node_to_struct(%Bolt.Sips.Types.Node{} = neo4j_node) do
+    props = neo4j_node.properties
 
-    edges =
-      rows
-      |> Enum.flat_map(& &1["rels"])
-      |> Enum.uniq_by(& &1.id)
+    %Node{
+      id: neo4j_node.id,
+      title: props["title"],
+      content: props["content"],
+      node_type: String.to_existing_atom(props["node_type"]),
+      confidence: props["confidence"] || 0.0,
+      provenance: props["provenance"] || [],
+      anchor_distance: props["anchor_distance"],
+      generated_at: parse_datetime(props["generated_at"])
+    }
+  end
 
-    {nodes, edges}
+  defp neo4j_rel_to_edge(%Bolt.Sips.Types.Relationship{} = rel) do
+    %Edge{
+      id: rel.id,
+      source_id: rel.start,
+      target_id: rel.end,
+      edge_type: rel.type |> String.downcase() |> String.to_existing_atom(),
+      confidence: (rel.properties || %{})["confidence"] || 0.0,
+      provenance: (rel.properties || %{})["provenance"] || []
+    }
+  end
+
+  defp parse_datetime(nil), do: nil
+
+  defp parse_datetime(iso_string) when is_binary(iso_string) do
+    case DateTime.from_iso8601(iso_string) do
+      {:ok, dt, _offset} -> dt
+      _ -> nil
+    end
+  end
+
+  defp validate_edge_type(edge_type) do
+    if edge_type in Edge.valid_types() do
+      :ok
+    else
+      {:error, {:invalid_edge_type, edge_type}}
+    end
   end
 end

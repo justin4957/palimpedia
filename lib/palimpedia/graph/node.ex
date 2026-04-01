@@ -9,7 +9,7 @@ defmodule Palimpedia.Graph.Node do
   @type confidence_score :: float()
 
   @type t :: %__MODULE__{
-          id: String.t() | nil,
+          id: integer() | nil,
           title: String.t(),
           content: String.t() | nil,
           node_type: node_type(),

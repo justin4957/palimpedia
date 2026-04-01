@@ -11,14 +11,12 @@ config :palimpedia,
   generators: [timestamp_type: :utc_datetime],
   graph_repository: Palimpedia.Graph.Neo4jRepository
 
-# Neo4j graph database
+# Neo4j graph database (overridden per environment)
 config :bolt_sips, Bolt,
-  url: System.get_env("NEO4J_URL") || "bolt://localhost:7687",
-  basic_auth: [
-    username: System.get_env("NEO4J_USERNAME") || "neo4j",
-    password: System.get_env("NEO4J_PASSWORD") || "password"
-  ],
-  pool_size: 10
+  url: "bolt://localhost:7687",
+  basic_auth: [username: "neo4j", password: "palimpedia_dev"],
+  pool_size: 10,
+  timeout: 15_000
 
 # LLM generation config (API keys loaded from environment)
 config :palimpedia, Palimpedia.Generation,

@@ -6,8 +6,6 @@ defmodule Palimpedia.Generation.PromptBuilder do
   not a topic string. This ensures generated content is structurally grounded.
   """
 
-  alias Palimpedia.Graph.Node
-
   @doc """
   Builds a generation prompt from a subgraph neighborhood.
   Includes node summaries, edge relationships, and anchor provenance.

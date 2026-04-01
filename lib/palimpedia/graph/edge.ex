@@ -18,9 +18,9 @@ defmodule Palimpedia.Graph.Edge do
           | :generalizes
 
   @type t :: %__MODULE__{
-          id: String.t() | nil,
-          source_id: String.t(),
-          target_id: String.t(),
+          id: integer() | nil,
+          source_id: integer(),
+          target_id: integer(),
           edge_type: edge_type(),
           confidence: float(),
           provenance: [String.t()],

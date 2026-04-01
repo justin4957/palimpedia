@@ -12,13 +12,13 @@ defmodule Palimpedia.Graph.Repository do
   @callback insert_node(Node.t()) :: {:ok, Node.t()} | {:error, term()}
 
   @doc "Retrieves a node by ID."
-  @callback get_node(String.t()) :: {:ok, Node.t()} | {:error, :not_found}
+  @callback get_node(integer()) :: {:ok, Node.t()} | {:error, :not_found}
 
   @doc "Inserts a typed edge between two nodes."
   @callback insert_edge(Edge.t()) :: {:ok, Edge.t()} | {:error, term()}
 
   @doc "Returns the local subgraph neighborhood within N hops of a node."
-  @callback subgraph(String.t(), non_neg_integer()) ::
+  @callback subgraph(integer(), non_neg_integer()) ::
               {:ok, [Node.t()], [Edge.t()]} | {:error, term()}
 
   @doc "Finds nodes matching a search query."
@@ -26,4 +26,7 @@ defmodule Palimpedia.Graph.Repository do
 
   @doc "Returns nodes with no outgoing edges (orphans)."
   @callback find_orphans(keyword()) :: {:ok, [Node.t()]} | {:error, term()}
+
+  @doc "Deletes all nodes and relationships. Use only in tests."
+  @callback delete_all() :: :ok | {:error, term()}
 end
