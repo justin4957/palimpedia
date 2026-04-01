@@ -11,9 +11,7 @@ defmodule Palimpedia.Application do
       PalimpediaWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:palimpedia, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Palimpedia.PubSub},
-      # Start a worker by calling: Palimpedia.Worker.start_link(arg)
-      # {Palimpedia.Worker, arg},
-      # Start to serve requests, typically the last entry
+      {Bolt.Sips, Application.get_env(:bolt_sips, Bolt)},
       PalimpediaWeb.Endpoint
     ]
 
