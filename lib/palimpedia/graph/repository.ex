@@ -43,6 +43,9 @@ defmodule Palimpedia.Graph.Repository do
   @callback shortest_anchor_distance(integer(), non_neg_integer()) ::
               {:ok, non_neg_integer() | nil} | {:error, term()}
 
+  @doc "Returns graph-level statistics: counts by node type, edge count, etc."
+  @callback stats() :: {:ok, map()} | {:error, term()}
+
   @doc "Deletes all nodes and relationships. Use only in tests."
   @callback delete_all() :: :ok | {:error, term()}
 end

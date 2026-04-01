@@ -242,6 +242,50 @@ defmodule Palimpedia.Graph.Neo4jRepository do
   end
 
   @impl true
+  def stats do
+    query = """
+    MATCH (n:Document)
+    WITH count(n) AS total_nodes,
+         sum(CASE WHEN n.node_type = 'anchor' THEN 1 ELSE 0 END) AS anchor_nodes,
+         sum(CASE WHEN n.node_type = 'generated' THEN 1 ELSE 0 END) AS generated_nodes,
+         sum(CASE WHEN n.node_type = 'requested' THEN 1 ELSE 0 END) AS requested_nodes,
+         sum(CASE WHEN n.node_type = 'bridge' THEN 1 ELSE 0 END) AS bridge_nodes,
+         avg(n.confidence) AS avg_confidence
+    OPTIONAL MATCH ()-[r]->()
+    RETURN total_nodes, anchor_nodes, generated_nodes, requested_nodes, bridge_nodes,
+           avg_confidence, count(r) AS total_edges
+    """
+
+    with {:ok, response} <- execute(query) do
+      case response.results do
+        [row] ->
+          {:ok,
+           %{
+             total_nodes: row["total_nodes"] || 0,
+             total_edges: row["total_edges"] || 0,
+             anchor_nodes: row["anchor_nodes"] || 0,
+             generated_nodes: row["generated_nodes"] || 0,
+             requested_nodes: row["requested_nodes"] || 0,
+             bridge_nodes: row["bridge_nodes"] || 0,
+             avg_confidence: row["avg_confidence"]
+           }}
+
+        _ ->
+          {:ok,
+           %{
+             total_nodes: 0,
+             total_edges: 0,
+             anchor_nodes: 0,
+             generated_nodes: 0,
+             requested_nodes: 0,
+             bridge_nodes: 0,
+             avg_confidence: nil
+           }}
+      end
+    end
+  end
+
+  @impl true
   def delete_all do
     query = "MATCH (n) DETACH DELETE n"
 
