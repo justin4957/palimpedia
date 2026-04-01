@@ -1,8 +1,24 @@
 defmodule PalimpediaWeb.Router do
   use PalimpediaWeb, :router
 
+  pipeline :browser do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+  end
+
   pipeline :api do
     plug :accepts, ["json"]
+  end
+
+  # HTML graph explorer
+  scope "/explore", PalimpediaWeb do
+    pipe_through :browser
+
+    get "/", ExplorerController, :index
+    get "/random", ExplorerController, :random
+    get "/nodes/:id", ExplorerController, :show_node
   end
 
   scope "/api", PalimpediaWeb do
