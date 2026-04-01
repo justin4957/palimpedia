@@ -164,6 +164,84 @@ defmodule Palimpedia.Graph.Neo4jRepository do
   end
 
   @impl true
+  def update_confidence(node_id, confidence, anchor_distance)
+      when is_integer(node_id) and is_float(confidence) do
+    query = """
+    MATCH (n:Document)
+    WHERE id(n) = $id
+    SET n.confidence = $confidence, n.anchor_distance = $anchor_distance
+    RETURN n
+    """
+
+    params = %{id: node_id, confidence: confidence, anchor_distance: anchor_distance}
+
+    with {:ok, response} <- execute(query, params) do
+      case response.results do
+        [%{"n" => neo4j_node}] -> {:ok, neo4j_node_to_struct(neo4j_node)}
+        [] -> {:error, :not_found}
+      end
+    end
+  end
+
+  @impl true
+  def anchor_sources(node_id, max_hops \\ 6) when is_integer(node_id) do
+    query = """
+    MATCH (start:Document)
+    WHERE id(start) = $id
+    MATCH path = (start)-[*1..#{max_hops}]-(anchor:Document {node_type: 'anchor'})
+    RETURN DISTINCT anchor
+    """
+
+    with {:ok, response} <- execute(query, %{id: node_id}) do
+      nodes =
+        Enum.map(response.results, fn %{"anchor" => neo4j_node} ->
+          neo4j_node_to_struct(neo4j_node)
+        end)
+
+      {:ok, nodes}
+    end
+  end
+
+  @impl true
+  def find_ungrounded(max_distance, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 100)
+
+    query = """
+    MATCH (n:Document)
+    WHERE n.anchor_distance IS NOT NULL AND n.anchor_distance > $max_distance
+    RETURN n
+    ORDER BY n.anchor_distance DESC
+    LIMIT $limit
+    """
+
+    with {:ok, response} <- execute(query, %{max_distance: max_distance, limit: limit}) do
+      nodes =
+        Enum.map(response.results, fn %{"n" => neo4j_node} ->
+          neo4j_node_to_struct(neo4j_node)
+        end)
+
+      {:ok, nodes}
+    end
+  end
+
+  @impl true
+  def shortest_anchor_distance(node_id, max_hops \\ 10) when is_integer(node_id) do
+    query = """
+    MATCH (start:Document)
+    WHERE id(start) = $id
+    OPTIONAL MATCH path = shortestPath((start)-[*1..#{max_hops}]-(anchor:Document {node_type: 'anchor'}))
+    RETURN CASE WHEN path IS NULL THEN null ELSE length(path) END AS distance
+    """
+
+    with {:ok, response} <- execute(query, %{id: node_id}) do
+      case response.results do
+        [%{"distance" => distance}] -> {:ok, distance}
+        [] -> {:ok, nil}
+      end
+    end
+  end
+
+  @impl true
   def delete_all do
     query = "MATCH (n) DETACH DELETE n"
 
