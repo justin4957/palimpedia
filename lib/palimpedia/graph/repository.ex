@@ -27,6 +27,22 @@ defmodule Palimpedia.Graph.Repository do
   @doc "Returns nodes with no outgoing edges (orphans)."
   @callback find_orphans(keyword()) :: {:ok, [Node.t()]} | {:error, term()}
 
+  @doc "Updates the confidence score and anchor_distance for a node."
+  @callback update_confidence(integer(), float(), non_neg_integer() | nil) ::
+              {:ok, Node.t()} | {:error, term()}
+
+  @doc "Returns all anchor nodes reachable within N hops from a given node."
+  @callback anchor_sources(integer(), non_neg_integer()) ::
+              {:ok, [Node.t()]} | {:error, term()}
+
+  @doc "Returns nodes whose anchor_distance exceeds the given threshold."
+  @callback find_ungrounded(non_neg_integer(), keyword()) ::
+              {:ok, [Node.t()]} | {:error, term()}
+
+  @doc "Returns the shortest path length from a node to any anchor node. nil if unreachable."
+  @callback shortest_anchor_distance(integer(), non_neg_integer()) ::
+              {:ok, non_neg_integer() | nil} | {:error, term()}
+
   @doc "Deletes all nodes and relationships. Use only in tests."
   @callback delete_all() :: :ok | {:error, term()}
 end
