@@ -43,6 +43,21 @@ defmodule Palimpedia.Graph.Repository do
   @callback shortest_anchor_distance(integer(), non_neg_integer()) ::
               {:ok, non_neg_integer() | nil} | {:error, term()}
 
+  @doc "Returns nodes with fewer than `min_edges` connections."
+  @callback find_low_connectivity(min_edges :: non_neg_integer(), keyword()) ::
+              {:ok, [%{node: Node.t(), degree: non_neg_integer()}]} | {:error, term()}
+
+  @doc """
+  Returns pairs of dense node clusters that lack a direct connecting edge.
+  Each result contains two node IDs that are within `max_hops` of each other
+  via intermediate nodes but share no direct edge.
+  """
+  @callback find_structural_holes(max_hops :: non_neg_integer(), keyword()) ::
+              {:ok, [map()]} | {:error, term()}
+
+  @doc "Returns the degree (edge count) for each node type, for coverage analysis."
+  @callback coverage_by_type() :: {:ok, map()} | {:error, term()}
+
   @doc "Returns graph-level statistics: counts by node type, edge count, etc."
   @callback stats() :: {:ok, map()} | {:error, term()}
 
