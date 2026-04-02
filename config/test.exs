@@ -17,6 +17,7 @@ config :bolt_sips, Bolt,
 # Disable background workers in tests
 config :palimpedia, Palimpedia.GapDetection.Scheduler, enabled: false
 config :palimpedia, Palimpedia.Generation.BatchWorker, enabled: false
+config :palimpedia, Palimpedia.Confidence.DecayPipeline, enabled: false
 
 # Print only warnings and errors during test
 config :logger, level: :warning
