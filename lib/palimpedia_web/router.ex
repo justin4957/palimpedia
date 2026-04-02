@@ -61,6 +61,11 @@ defmodule PalimpediaWeb.Router do
     get "/generate/status", OnDemandController, :status
     get "/generate/pending", OnDemandController, :list_pending
 
+    # Provenance explorer
+    get "/provenance/trace/:node_id", ProvenanceController, :trace
+    get "/provenance/audit", ProvenanceController, :audit
+    get "/provenance/broken-chains", ProvenanceController, :broken_chains
+
     # Revision history
     get "/revisions/recent", RevisionController, :recent
     get "/revisions/stats", RevisionController, :stats
