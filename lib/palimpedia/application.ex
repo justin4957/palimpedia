@@ -13,6 +13,7 @@ defmodule Palimpedia.Application do
       {Phoenix.PubSub, name: Palimpedia.PubSub},
       {Bolt.Sips, Application.get_env(:bolt_sips, Bolt)},
       Palimpedia.Federation.InstanceRegistry,
+      Palimpedia.Federation.ConflictResolver,
       Palimpedia.Security.AntiPoisoning,
       Palimpedia.Interaction.UserTrust,
       Palimpedia.Interaction.Convergence,

@@ -1,7 +1,7 @@
 defmodule PalimpediaWeb.FederationController do
   use PalimpediaWeb, :controller
 
-  alias Palimpedia.Federation.{Sync, InstanceRegistry, Protocol}
+  alias Palimpedia.Federation.{Sync, InstanceRegistry, Protocol, ConflictResolver}
 
   @moduledoc "REST API for federation: peer management, subgraph sharing."
 
@@ -75,6 +75,61 @@ defmodule PalimpediaWeb.FederationController do
 
   def import_message(conn, _params) do
     conn |> put_status(400) |> json(%{error: "Required: message (JSON string)"})
+  end
+
+  @doc "GET /api/federation/conflicts — List detected conflicts."
+  def list_conflicts(conn, params) do
+    status =
+      case Map.get(params, "status") do
+        "detected" -> :detected
+        "resolved" -> :resolved
+        _ -> nil
+      end
+
+    conflicts = ConflictResolver.list_conflicts(status: status)
+
+    json(conn, %{
+      data: Enum.map(conflicts, &conflict_to_json/1),
+      meta: %{count: length(conflicts)}
+    })
+  end
+
+  @doc "GET /api/federation/conflicts/stats — Conflict statistics."
+  def conflict_stats(conn, _params) do
+    json(conn, %{data: ConflictResolver.stats()})
+  end
+
+  @doc "POST /api/federation/conflicts/:id/resolve — Resolve a conflict."
+  def resolve_conflict(conn, %{"id" => conflict_id} = params) do
+    case Map.get(params, "score") do
+      nil ->
+        case ConflictResolver.resolve(conflict_id) do
+          {:ok, resolved} -> json(conn, %{data: conflict_to_json(resolved)})
+          {:error, :not_found} -> conn |> put_status(404) |> json(%{error: "Conflict not found"})
+        end
+
+      score when is_number(score) ->
+        case ConflictResolver.resolve_manually(conflict_id, score / 1) do
+          {:ok, resolved} -> json(conn, %{data: conflict_to_json(resolved)})
+          {:error, :not_found} -> conn |> put_status(404) |> json(%{error: "Conflict not found"})
+        end
+
+      _ ->
+        conn |> put_status(400) |> json(%{error: "Invalid score"})
+    end
+  end
+
+  defp conflict_to_json(c) do
+    %{
+      id: c.id,
+      node_title: c.node_title,
+      instance_scores: c.instance_scores,
+      resolved_score: c.resolved_score,
+      strategy_used: c.strategy_used,
+      status: c.status,
+      detected_at: DateTime.to_iso8601(c.detected_at),
+      resolved_at: c.resolved_at && DateTime.to_iso8601(c.resolved_at)
+    }
   end
 
   defp peer_to_json(peer) do
