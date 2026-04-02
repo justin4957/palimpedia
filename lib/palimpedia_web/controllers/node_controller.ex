@@ -2,8 +2,9 @@ defmodule PalimpediaWeb.NodeController do
   use PalimpediaWeb, :controller
 
   alias PalimpediaWeb.GraphJSON
-  alias Palimpedia.Graph.{Node, Edge}
+  alias Palimpedia.Graph.Node
   alias Palimpedia.Confidence.Contradiction
+  alias Palimpedia.Interaction.Handler
 
   @moduledoc """
   REST API for graph nodes (documents).
@@ -56,11 +57,15 @@ defmodule PalimpediaWeb.NodeController do
   end
 
   @doc "POST /api/nodes/request — Tier 1: Request generation of a new document."
-  def request_node(conn, %{"title" => title} = _params) do
+  def request_node(conn, %{"title" => title} = params) do
+    user_id = Map.get(params, "user_id")
     node = Node.new_request(title)
 
     case graph_repo().insert_node(node) do
       {:ok, inserted} ->
+        # Side effects: trust scoring, queue boost, on-demand evaluation
+        Handler.handle_node_request(title, user_id: user_id)
+
         conn
         |> put_status(201)
         |> json(%{
@@ -88,23 +93,22 @@ defmodule PalimpediaWeb.NodeController do
     with {source_id, ""} <- Integer.parse(source_str),
          {target_id, ""} <- Integer.parse(target_str),
          {:ok, edge_type} <- parse_edge_type(edge_type_str) do
+      user_id = Map.get(params, "user_id")
       confidence = Map.get(params, "confidence", 0.5) |> ensure_float()
+      description = Map.get(params, "description")
 
-      edge = %Edge{
-        source_id: source_id,
-        target_id: target_id,
-        edge_type: edge_type,
-        confidence: confidence,
-        provenance: []
-      }
-
-      case graph_repo().insert_edge(edge) do
+      # Side effects: trust scoring, edge creation, relationship exploration enqueued
+      case Handler.handle_edge_assertion(source_id, target_id, edge_type,
+             user_id: user_id,
+             confidence: confidence,
+             description: description
+           ) do
         {:ok, inserted} ->
           conn
           |> put_status(201)
           |> json(%{
             data: GraphJSON.edge_to_json(inserted),
-            meta: %{tier: 2, status: "created"}
+            meta: %{tier: 2, status: "created", exploration_enqueued: true}
           })
 
         {:error, reason} ->
@@ -137,11 +141,13 @@ defmodule PalimpediaWeb.NodeController do
       }) do
     with {node_a_id, ""} <- Integer.parse(a_str),
          {node_b_id, ""} <- Integer.parse(b_str) do
+      user_id = conn.params["user_id"]
       severity = parse_severity(conn.params["severity"])
 
-      case Contradiction.flag(node_a_id, node_b_id, description,
-             severity: severity,
-             flagged_by: :user
+      # Side effects: trust scoring, contradiction flagging, confidence review
+      case Handler.handle_contradiction_flag(node_a_id, node_b_id, description,
+             user_id: user_id,
+             severity: severity
            ) do
         {:ok, contradiction} ->
           conn
@@ -157,7 +163,7 @@ defmodule PalimpediaWeb.NodeController do
               status: contradiction.status,
               flagged_at: DateTime.to_iso8601(contradiction.flagged_at)
             },
-            meta: %{status: "flagged"}
+            meta: %{status: "flagged", confidence_review: "triggered"}
           })
       end
     else
@@ -172,6 +178,29 @@ defmodule PalimpediaWeb.NodeController do
     conn
     |> put_status(400)
     |> json(%{error: "Required fields: node_a_id, node_b_id, description"})
+  end
+
+  @doc "GET /api/users/:user_id/trust — Get user trust profile."
+  def user_trust(conn, %{"user_id" => user_id}) do
+    alias Palimpedia.Interaction.UserTrust
+
+    case UserTrust.get_profile(user_id) do
+      {:ok, profile} ->
+        json(conn, %{
+          data: %{
+            user_id: profile.user_id,
+            trust_score: profile.trust_score,
+            total_interactions: profile.total_interactions,
+            tier_counts: profile.tier_counts,
+            approved_contributions: profile.approved_contributions,
+            rejected_contributions: profile.rejected_contributions,
+            last_active_at: DateTime.to_iso8601(profile.last_active_at)
+          }
+        })
+
+      {:error, :not_found} ->
+        conn |> put_status(404) |> json(%{error: "User not found", user_id: user_id})
+    end
   end
 
   # --- Private ---
