@@ -107,6 +107,12 @@ defmodule PalimpediaWeb.Router do
     get "/federation/conflicts/stats", FederationController, :conflict_stats
     post "/federation/conflicts/:id/resolve", FederationController, :resolve_conflict
 
+    # Graph export (RDF / JSON-LD)
+    post "/export/snapshot", ExportController, :create_snapshot
+    get "/export/snapshots", ExportController, :list_snapshots
+    get "/export/snapshots/:id", ExportController, :get_snapshot
+    get "/export/diff", ExportController, :diff
+
     # Graph operations
     get "/graph/subgraph/:id", GraphController, :subgraph
     get "/graph/stats", GraphController, :stats

@@ -23,6 +23,7 @@ defmodule Palimpedia.Application do
       Palimpedia.Generation.RevisionHistory,
       Palimpedia.Generation.OnDemand,
       Palimpedia.Generation.Metrics,
+      Palimpedia.Export.Snapshot,
       Palimpedia.Confidence.DecayPipeline,
       Palimpedia.GapDetection.Scheduler,
       Palimpedia.Generation.BatchWorker,
