@@ -40,8 +40,10 @@ defmodule PalimpediaWeb.Router do
     get "/nodes/:id", NodeController, :show
     post "/nodes/request", NodeController, :request_node
 
-    # User trust
+    # User trust & convergence
     get "/users/:user_id/trust", NodeController, :user_trust
+    get "/convergence", ConvergenceController, :index
+    get "/convergence/stats", ConvergenceController, :stats
 
     # On-demand generation
     get "/generate/evaluate", OnDemandController, :evaluate
