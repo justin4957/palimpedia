@@ -102,6 +102,8 @@ defmodule PalimpediaWeb.Router do
     get "/coverage/blind-spots", CoverageController, :blind_spots
     get "/coverage/gaps", CoverageController, :gaps
     get "/coverage/epistemic-index", CoverageController, :epistemic_index
+    get "/coverage/bias-audit", CoverageController, :bias_audit
+    get "/coverage/taxonomy", CoverageController, :taxonomy
 
     # Federation
     get "/federation/peers", FederationController, :list_peers

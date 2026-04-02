@@ -2,6 +2,7 @@ defmodule PalimpediaWeb.CoverageController do
   use PalimpediaWeb, :controller
 
   alias Palimpedia.Coverage.Map, as: CoverageMap
+  alias Palimpedia.Coverage.BiasAuditor
 
   @moduledoc """
   REST API for coverage maps, confidence distribution,
@@ -74,5 +75,40 @@ defmodule PalimpediaWeb.CoverageController do
       {:ok, report} ->
         json(conn, %{data: report.epistemic_index})
     end
+  end
+
+  @doc "GET /api/coverage/bias-audit — Bias audit against reference taxonomy."
+  def bias_audit(conn, params) do
+    boost = Map.get(params, "boost", "false") == "true"
+
+    case BiasAuditor.audit(boost_underrepresented: boost) do
+      {:ok, result} ->
+        json(conn, %{
+          data: %{
+            domain_coverage: result.domain_coverage,
+            underrepresented: result.underrepresented,
+            overrepresented: result.overrepresented,
+            coverage_balance_score: result.coverage_balance_score,
+            boosted_domains: result.boosted_domains,
+            recommendations: result.recommendations
+          },
+          audited_at: DateTime.to_iso8601(result.audited_at)
+        })
+
+      {:error, reason} ->
+        conn |> put_status(500) |> json(%{error: inspect(reason)})
+    end
+  end
+
+  @doc "GET /api/coverage/taxonomy — Reference knowledge taxonomy."
+  def taxonomy(conn, _params) do
+    taxonomy =
+      BiasAuditor.reference_taxonomy()
+      |> Enum.map(fn {domain, info} ->
+        %{domain: domain, expected_share: info.expected_share, keywords: info.keywords}
+      end)
+      |> Enum.sort_by(& &1.expected_share, :desc)
+
+    json(conn, %{data: taxonomy})
   end
 end
