@@ -8,7 +8,7 @@ defmodule Palimpedia.Interaction.Handler do
   - Tier 3: creates contradiction in store, triggers subgraph confidence review
   """
 
-  alias Palimpedia.Interaction.UserTrust
+  alias Palimpedia.Interaction.{UserTrust, Convergence}
   alias Palimpedia.GapDetection.GenerationQueue
   alias Palimpedia.Generation.OnDemand
   alias Palimpedia.Confidence.{Contradiction, Updater}
@@ -28,6 +28,9 @@ defmodule Palimpedia.Interaction.Handler do
     user_id = Keyword.get(opts, :user_id)
     record_trust(user_id, :node_request)
 
+    # Record convergence signal
+    convergence = record_convergence(title, :node_request, user_id)
+
     # Try to boost existing queue entry
     boosted = boost_queue(title, user_id)
 
@@ -36,7 +39,7 @@ defmodule Palimpedia.Interaction.Handler do
       evaluate_on_demand(title)
     end
 
-    {:ok, %{title: title, boosted: boosted > 0}}
+    {:ok, %{title: title, boosted: boosted > 0, convergence: convergence}}
   end
 
   @doc """
@@ -64,6 +67,10 @@ defmodule Palimpedia.Interaction.Handler do
       confidence: confidence,
       provenance: if(user_id, do: ["user:#{user_id}"], else: [])
     }
+
+    # Record convergence signal for the relationship
+    topic = description || "#{source_id} #{edge_type} #{target_id}"
+    record_convergence(topic, :edge_assertion, user_id)
 
     edge_result = graph_repo.insert_edge(edge)
 
@@ -103,6 +110,18 @@ defmodule Palimpedia.Interaction.Handler do
   end
 
   # --- Private ---
+
+  defp record_convergence(topic, tier, user_id) do
+    if Process.whereis(Convergence) do
+      case Convergence.record_signal(topic, tier, user_id: user_id) do
+        {:ok, :converged, _cluster} -> :converged
+        {:ok, :already_converged, _cluster} -> :already_converged
+        _ -> :recorded
+      end
+    else
+      :recorded
+    end
+  end
 
   defp record_trust(nil, _tier), do: :ok
 
