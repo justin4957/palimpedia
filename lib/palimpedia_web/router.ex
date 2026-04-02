@@ -40,6 +40,11 @@ defmodule PalimpediaWeb.Router do
     get "/nodes/:id", NodeController, :show
     post "/nodes/request", NodeController, :request_node
 
+    # On-demand generation
+    get "/generate/evaluate", OnDemandController, :evaluate
+    get "/generate/status", OnDemandController, :status
+    get "/generate/pending", OnDemandController, :list_pending
+
     # Layer 4: Edge assertions
     post "/edges", NodeController, :assert_edge
 
