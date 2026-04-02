@@ -13,7 +13,9 @@ defmodule Palimpedia.Application do
       {Phoenix.PubSub, name: Palimpedia.PubSub},
       {Bolt.Sips, Application.get_env(:bolt_sips, Bolt)},
       Palimpedia.GapDetection.GenerationQueue,
+      Palimpedia.Generation.Metrics,
       Palimpedia.GapDetection.Scheduler,
+      Palimpedia.Generation.BatchWorker,
       PalimpediaWeb.Endpoint
     ]
 
