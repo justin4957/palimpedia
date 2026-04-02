@@ -14,8 +14,9 @@ config :bolt_sips, Bolt,
   pool_size: 5,
   timeout: 15_000
 
-# Disable gap detection scheduler in tests
+# Disable background workers in tests
 config :palimpedia, Palimpedia.GapDetection.Scheduler, enabled: false
+config :palimpedia, Palimpedia.Generation.BatchWorker, enabled: false
 
 # Print only warnings and errors during test
 config :logger, level: :warning
