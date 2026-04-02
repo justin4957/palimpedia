@@ -3,7 +3,7 @@ defmodule PalimpediaWeb.NodeController do
 
   alias PalimpediaWeb.GraphJSON
   alias Palimpedia.Graph.{Node, Edge}
-  alias Palimpedia.Interaction.UserInput
+  alias Palimpedia.Confidence.Contradiction
 
   @moduledoc """
   REST API for graph nodes (documents).
@@ -16,7 +16,12 @@ defmodule PalimpediaWeb.NodeController do
       {node_id, ""} ->
         case graph_repo().get_node(node_id) do
           {:ok, node} ->
-            json(conn, %{data: GraphJSON.node_to_json(node)})
+            contradiction_count = contradiction_count_for(node_id)
+
+            json(conn, %{
+              data: GraphJSON.node_to_json(node),
+              contradictions: %{open_count: contradiction_count}
+            })
 
           {:error, :not_found} ->
             conn |> put_status(404) |> json(%{error: "Node not found", node_id: node_id})
@@ -130,20 +135,29 @@ defmodule PalimpediaWeb.NodeController do
       }) do
     with {node_a_id, ""} <- Integer.parse(a_str),
          {node_b_id, ""} <- Integer.parse(b_str) do
-      input = UserInput.contradiction_flag(node_a_id, node_b_id, description)
+      severity = parse_severity(conn.params["severity"])
 
-      conn
-      |> put_status(201)
-      |> json(%{
-        data: %{
-          tier: 3,
-          node_a_id: node_a_id,
-          node_b_id: node_b_id,
-          description: description,
-          timestamp: DateTime.to_iso8601(input.timestamp)
-        },
-        meta: %{status: "flagged"}
-      })
+      case Contradiction.flag(node_a_id, node_b_id, description,
+             severity: severity,
+             flagged_by: :user
+           ) do
+        {:ok, contradiction} ->
+          conn
+          |> put_status(201)
+          |> json(%{
+            data: %{
+              id: contradiction.id,
+              tier: 3,
+              node_a_id: contradiction.node_a_id,
+              node_b_id: contradiction.node_b_id,
+              description: contradiction.description,
+              severity: contradiction.severity,
+              status: contradiction.status,
+              flagged_at: DateTime.to_iso8601(contradiction.flagged_at)
+            },
+            meta: %{status: "flagged"}
+          })
+      end
     else
       _ ->
         conn
@@ -193,4 +207,16 @@ defmodule PalimpediaWeb.NodeController do
   defp ensure_float(v) when is_float(v), do: v
   defp ensure_float(v) when is_integer(v), do: v / 1
   defp ensure_float(_), do: 0.5
+
+  defp contradiction_count_for(node_id) do
+    if Process.whereis(Contradiction) do
+      Contradiction.count_for_node(node_id)
+    else
+      0
+    end
+  end
+
+  defp parse_severity("high"), do: :high
+  defp parse_severity("low"), do: :low
+  defp parse_severity(_), do: :medium
 end
