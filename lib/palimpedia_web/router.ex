@@ -98,6 +98,12 @@ defmodule PalimpediaWeb.Router do
     get "/coverage/gaps", CoverageController, :gaps
     get "/coverage/epistemic-index", CoverageController, :epistemic_index
 
+    # Federation
+    get "/federation/peers", FederationController, :list_peers
+    post "/federation/peers", FederationController, :register_peer
+    post "/federation/export/:node_id", FederationController, :export
+    post "/federation/import", FederationController, :import_message
+
     # Graph operations
     get "/graph/subgraph/:id", GraphController, :subgraph
     get "/graph/stats", GraphController, :stats
