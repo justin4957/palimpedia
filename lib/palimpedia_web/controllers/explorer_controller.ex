@@ -37,7 +37,10 @@ defmodule PalimpediaWeb.ExplorerController do
       {node_id, ""} ->
         with {:ok, node} <- graph_repo().get_node(node_id),
              {:ok, neighbors, edges} <- graph_repo().subgraph(node_id, 1) do
-          html(conn, render_node(node, neighbors, edges))
+          conn
+          |> put_resp_header("cache-control", "public, max-age=300")
+          |> put_resp_header("etag", etag_for_node(node))
+          |> html(render_node(node, neighbors, edges))
         else
           {:error, :not_found} ->
             conn |> put_status(404) |> html(render_not_found(node_id))
@@ -193,7 +196,8 @@ defmodule PalimpediaWeb.ExplorerController do
         #{incoming_section}
         #{neighbor_section}
       </article>
-      """
+      """,
+      schema_org_jsonld(node)
     )
   end
 
@@ -290,6 +294,11 @@ defmodule PalimpediaWeb.ExplorerController do
   # --- Layout ---
 
   defp page_layout(title, body) when is_binary(title) and is_binary(body) do
+    page_layout(title, body, "")
+  end
+
+  defp page_layout(title, body, extra_head)
+       when is_binary(title) and is_binary(body) and is_binary(extra_head) do
     """
     <!DOCTYPE html>
     <html lang="en">
@@ -298,6 +307,7 @@ defmodule PalimpediaWeb.ExplorerController do
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>#{esc(title)}</title>
       <style>#{css()}</style>
+      #{extra_head}
     </head>
     <body>
       #{body}
@@ -435,6 +445,42 @@ defmodule PalimpediaWeb.ExplorerController do
     .error-page h1 { margin-bottom: 1rem; }
     .error-page a { display: inline-block; margin-top: 1rem; }
     """
+  end
+
+  defp schema_org_jsonld(node) do
+    host = PalimpediaWeb.Endpoint.url()
+
+    jsonld =
+      %{
+        "@context" => "https://schema.org",
+        "@type" => "Article",
+        "name" => node.title,
+        "description" => (node.content || "") |> String.slice(0, 300),
+        "url" => "#{host}/explore/nodes/#{node.id}",
+        "identifier" => node.provenance,
+        "dateCreated" => node.generated_at && DateTime.to_iso8601(node.generated_at),
+        "additionalProperty" => [
+          %{"@type" => "PropertyValue", "name" => "confidence", "value" => node.confidence},
+          %{
+            "@type" => "PropertyValue",
+            "name" => "node_type",
+            "value" => Atom.to_string(node.node_type)
+          },
+          %{
+            "@type" => "PropertyValue",
+            "name" => "anchor_distance",
+            "value" => node.anchor_distance
+          }
+        ]
+      }
+      |> Jason.encode!()
+
+    ~s[<script type="application/ld+json">#{jsonld}</script>]
+  end
+
+  defp etag_for_node(node) do
+    data = "#{node.id}:#{node.confidence}:#{node.anchor_distance}"
+    "\"" <> Base.encode16(:crypto.hash(:md5, data), case: :lower) <> "\""
   end
 
   defp graph_repo do
