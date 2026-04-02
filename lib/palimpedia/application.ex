@@ -20,6 +20,7 @@ defmodule Palimpedia.Application do
       Palimpedia.GapDetection.GenerationQueue,
       Palimpedia.Generation.OnDemand,
       Palimpedia.Generation.Metrics,
+      Palimpedia.Confidence.DecayPipeline,
       Palimpedia.GapDetection.Scheduler,
       Palimpedia.Generation.BatchWorker,
       PalimpediaWeb.Endpoint

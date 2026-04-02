@@ -58,6 +58,13 @@ defmodule Palimpedia.Graph.Repository do
   @doc "Returns the degree (edge count) for each node type, for coverage analysis."
   @callback coverage_by_type() :: {:ok, map()} | {:error, term()}
 
+  @doc "Returns generated nodes older than the given number of days."
+  @callback find_stale_nodes(max_age_days :: non_neg_integer(), keyword()) ::
+              {:ok, [Node.t()]} | {:error, term()}
+
+  @doc "Returns all generated (non-anchor) nodes."
+  @callback find_generated_nodes(keyword()) :: {:ok, [Node.t()]} | {:error, term()}
+
   @doc "Returns graph-level statistics: counts by node type, edge count, etc."
   @callback stats() :: {:ok, map()} | {:error, term()}
 

@@ -106,5 +106,8 @@ defmodule Palimpedia.Test.MockGraphRepo do
      }}
   end
 
+  def find_stale_nodes(_max_age_days, _opts), do: {:ok, []}
+  def find_generated_nodes(_opts), do: {:ok, [@generated]}
+
   def delete_all, do: :ok
 end

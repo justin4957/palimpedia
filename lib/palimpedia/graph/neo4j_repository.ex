@@ -319,6 +319,55 @@ defmodule Palimpedia.Graph.Neo4jRepository do
   defp safe_div(a, b), do: a / b
 
   @impl true
+  def find_stale_nodes(max_age_days, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 100)
+
+    cutoff =
+      DateTime.utc_now() |> DateTime.add(-max_age_days * 86400, :second) |> DateTime.to_iso8601()
+
+    query = """
+    MATCH (n:Document)
+    WHERE n.node_type <> 'anchor'
+      AND n.generated_at IS NOT NULL
+      AND n.generated_at < $cutoff
+    RETURN n
+    ORDER BY n.generated_at ASC
+    LIMIT $limit
+    """
+
+    with {:ok, response} <- execute(query, %{cutoff: cutoff, limit: limit}) do
+      nodes =
+        Enum.map(response.results, fn %{"n" => neo4j_node} ->
+          neo4j_node_to_struct(neo4j_node)
+        end)
+
+      {:ok, nodes}
+    end
+  end
+
+  @impl true
+  def find_generated_nodes(opts \\ []) do
+    limit = Keyword.get(opts, :limit, 500)
+
+    query = """
+    MATCH (n:Document)
+    WHERE n.node_type <> 'anchor'
+    RETURN n
+    ORDER BY n.confidence ASC
+    LIMIT $limit
+    """
+
+    with {:ok, response} <- execute(query, %{limit: limit}) do
+      nodes =
+        Enum.map(response.results, fn %{"n" => neo4j_node} ->
+          neo4j_node_to_struct(neo4j_node)
+        end)
+
+      {:ok, nodes}
+    end
+  end
+
+  @impl true
   def stats do
     query = """
     MATCH (n:Document)
