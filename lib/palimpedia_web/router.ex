@@ -61,6 +61,11 @@ defmodule PalimpediaWeb.Router do
     get "/generate/status", OnDemandController, :status
     get "/generate/pending", OnDemandController, :list_pending
 
+    # Revision history
+    get "/revisions/recent", RevisionController, :recent
+    get "/revisions/stats", RevisionController, :stats
+    get "/revisions/node/:node_id", RevisionController, :history_for
+
     # Layer 4: Edge assertions
     post "/edges", NodeController, :assert_edge
 

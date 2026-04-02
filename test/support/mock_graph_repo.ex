@@ -109,5 +109,23 @@ defmodule Palimpedia.Test.MockGraphRepo do
   def find_stale_nodes(_max_age_days, _opts), do: {:ok, []}
   def find_generated_nodes(_opts), do: {:ok, [@generated]}
 
+  def shortest_anchor_distance(1, _), do: {:ok, 0}
+  def shortest_anchor_distance(2, _), do: {:ok, 1}
+  def shortest_anchor_distance(_, _), do: {:ok, nil}
+
+  def anchor_sources(1, _), do: {:ok, [@anchor]}
+  def anchor_sources(_, _), do: {:ok, []}
+
+  def update_confidence(node_id, confidence, anchor_distance) do
+    {:ok,
+     %Node{
+       id: node_id,
+       title: "Updated",
+       node_type: :generated,
+       confidence: confidence,
+       anchor_distance: anchor_distance
+     }}
+  end
+
   def delete_all, do: :ok
 end

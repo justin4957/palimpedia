@@ -18,6 +18,7 @@ defmodule Palimpedia.Application do
       Palimpedia.Confidence.Contradiction,
       Palimpedia.Review.Queue,
       Palimpedia.GapDetection.GenerationQueue,
+      Palimpedia.Generation.RevisionHistory,
       Palimpedia.Generation.OnDemand,
       Palimpedia.Generation.Metrics,
       Palimpedia.Confidence.DecayPipeline,
