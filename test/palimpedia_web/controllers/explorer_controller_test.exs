@@ -51,6 +51,21 @@ defmodule PalimpediaWeb.ExplorerControllerTest do
       assert body =~ ~r/href="\/explore\/nodes\/2"/
     end
 
+    test "includes Schema.org JSON-LD structured data", %{conn: conn} do
+      conn = get(conn, "/explore/nodes/1")
+      body = html_response(conn, 200)
+
+      assert body =~ "application/ld+json"
+      assert body =~ "schema.org"
+      assert body =~ "Article"
+    end
+
+    test "includes cache headers", %{conn: conn} do
+      conn = get(conn, "/explore/nodes/1")
+      assert get_resp_header(conn, "cache-control") == ["public, max-age=300"]
+      assert get_resp_header(conn, "etag") != []
+    end
+
     test "renders a generated node with generated_at", %{conn: conn} do
       conn = get(conn, "/explore/nodes/2")
       body = html_response(conn, 200)

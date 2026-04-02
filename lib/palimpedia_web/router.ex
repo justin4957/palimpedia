@@ -10,6 +10,17 @@ defmodule PalimpediaWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug PalimpediaWeb.Plugs.RateLimiter, max_requests: 60, window_ms: 60_000
+  end
+
+  pipeline :crawler do
+    plug :accepts, ["xml"]
+  end
+
+  # Sitemap for search engines
+  scope "/", PalimpediaWeb do
+    pipe_through :crawler
+    get "/sitemap.xml", SitemapController, :index
   end
 
   # HTML graph explorer

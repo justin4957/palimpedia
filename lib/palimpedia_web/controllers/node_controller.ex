@@ -18,7 +18,9 @@ defmodule PalimpediaWeb.NodeController do
           {:ok, node} ->
             contradiction_count = contradiction_count_for(node_id)
 
-            json(conn, %{
+            conn
+            |> put_resp_header("cache-control", "public, max-age=60")
+            |> json(%{
               data: GraphJSON.node_to_json(node),
               contradictions: %{open_count: contradiction_count}
             })
