@@ -1,0 +1,69 @@
+## Production/Air-Gapped Docker Compose for Palimpedia
+##
+## Usage:
+##   Standard deployment:    docker compose -f docker-compose.prod.yml up -d
+##   Air-gapped deployment:  docker compose -f docker-compose.prod.yml --profile airgapped up -d
+##
+## The airgapped profile adds Ollama for local LLM inference.
+
+services:
+  neo4j:
+    image: neo4j:4.4
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    environment:
+      NEO4J_AUTH: "${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:?NEO4J_PASSWORD required}"
+      NEO4J_dbms_memory_heap_max__size: "${NEO4J_HEAP:-1G}"
+      NEO4J_PLUGINS: '[]'
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  palimpedia:
+    build: .
+    ports:
+      - "${PHX_PORT:-4000}:4000"
+    environment:
+      PHX_SERVER: "true"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:?SECRET_KEY_BASE required}"
+      PHX_HOST: "${PHX_HOST:-localhost}"
+      NEO4J_URL: "bolt://neo4j:7687"
+      NEO4J_USERNAME: "${NEO4J_USERNAME:-neo4j}"
+      NEO4J_PASSWORD: "${NEO4J_PASSWORD:?NEO4J_PASSWORD required}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      DEPLOYMENT_MODE: "${DEPLOYMENT_MODE:-standard}"
+      LLM_PROVIDER: "${LLM_PROVIDER:-anthropic}"
+      OLLAMA_URL: "${OLLAMA_URL:-http://ollama:11434}"
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ## Ollama for air-gapped local LLM inference
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["airgapped"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  ollama_data:
