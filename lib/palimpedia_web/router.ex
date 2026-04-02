@@ -103,6 +103,9 @@ defmodule PalimpediaWeb.Router do
     post "/federation/peers", FederationController, :register_peer
     post "/federation/export/:node_id", FederationController, :export
     post "/federation/import", FederationController, :import_message
+    get "/federation/conflicts", FederationController, :list_conflicts
+    get "/federation/conflicts/stats", FederationController, :conflict_stats
+    post "/federation/conflicts/:id/resolve", FederationController, :resolve_conflict
 
     # Graph operations
     get "/graph/subgraph/:id", GraphController, :subgraph
