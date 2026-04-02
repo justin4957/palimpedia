@@ -52,6 +52,11 @@ defmodule PalimpediaWeb.Router do
     get "/convergence", ConvergenceController, :index
     get "/convergence/stats", ConvergenceController, :stats
 
+    # Hallucination guard
+    get "/hallucination/stats", SecurityController, :hallucination_stats
+    get "/hallucination/audit/:node_id", SecurityController, :hallucination_audit
+    get "/hallucination/downstream/:node_id", SecurityController, :hallucination_downstream
+
     # Domain configuration
     get "/domains", DomainController, :index
     get "/domains/:id", DomainController, :show

@@ -14,6 +14,7 @@ defmodule Palimpedia.Application do
       {Bolt.Sips, Application.get_env(:bolt_sips, Bolt)},
       Palimpedia.Federation.InstanceRegistry,
       Palimpedia.Federation.ConflictResolver,
+      Palimpedia.Security.HallucinationGuard,
       Palimpedia.Security.AntiPoisoning,
       Palimpedia.Interaction.UserTrust,
       Palimpedia.Interaction.Convergence,
