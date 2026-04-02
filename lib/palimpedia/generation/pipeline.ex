@@ -11,6 +11,7 @@ defmodule Palimpedia.Generation.Pipeline do
   """
 
   alias Palimpedia.Generation.{PromptBuilder, LlmClient, ResponseParser}
+  alias Palimpedia.Security.HallucinationGuard
   alias Palimpedia.Graph.{Node, Edge}
 
   require Logger
@@ -74,11 +75,17 @@ defmodule Palimpedia.Generation.Pipeline do
 
       anchor_distance = compute_anchor_distance(context.subgraph_nodes)
 
+      raw_confidence = compute_generation_confidence(parsed.claims)
+
+      # Enforce hallucination guard: ungrounded docs can't exceed ceiling
+      capped_confidence =
+        HallucinationGuard.enforce_confidence_ceiling(raw_confidence, anchor_distance, provenance)
+
       new_node =
         Node.new_generated(
           parsed.title,
           parsed.content,
-          confidence: compute_generation_confidence(parsed.claims),
+          confidence: capped_confidence,
           provenance: provenance,
           anchor_distance: anchor_distance
         )
@@ -86,6 +93,10 @@ defmodule Palimpedia.Generation.Pipeline do
       case graph_repo.insert_node(new_node) do
         {:ok, inserted_node} ->
           edge_results = create_edges(inserted_node, parsed.edges, graph_repo)
+
+          # Record generation audit trail
+          context_ids = Enum.map(context.subgraph_nodes, & &1.id) |> Enum.reject(&is_nil/1)
+          record_audit(inserted_node.id, context_ids)
 
           Logger.info(
             "Generated document: #{parsed.title} (#{length(parsed.claims)} claims, " <>
@@ -180,6 +191,12 @@ defmodule Palimpedia.Generation.Pipeline do
     case anchor_distances do
       [] -> nil
       distances -> Enum.min(distances) + 1
+    end
+  end
+
+  defp record_audit(generated_node_id, context_ids) do
+    if Process.whereis(HallucinationGuard) do
+      HallucinationGuard.record_generation(generated_node_id, context_ids)
     end
   end
 
