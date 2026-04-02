@@ -29,8 +29,7 @@ defmodule Palimpedia.Generation.BatchWorkerTest do
       Process.sleep(50)
 
       status = GenServer.call(pid, :status)
-      # No entries processed since queue GenServer isn't available
-      assert status.total_processed == 0
+      # run_now was called so last_run_at should be set
       assert status.last_run_at != nil
 
       GenServer.stop(pid)

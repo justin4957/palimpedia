@@ -35,6 +35,14 @@ defmodule PalimpediaWeb.Router do
     # Layer 4: Contradiction flags
     post "/contradictions", NodeController, :flag_contradiction
 
+    # Human review queue
+    get "/reviews", ReviewController, :index
+    get "/reviews/stats", ReviewController, :stats
+    get "/reviews/:id", ReviewController, :show
+    post "/reviews/:id/approve", ReviewController, :approve
+    post "/reviews/:id/reject", ReviewController, :reject
+    post "/reviews/:id/flag", ReviewController, :flag
+
     # Graph operations
     get "/graph/subgraph/:id", GraphController, :subgraph
     get "/graph/stats", GraphController, :stats
