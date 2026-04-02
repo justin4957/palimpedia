@@ -52,6 +52,11 @@ defmodule PalimpediaWeb.Router do
     get "/convergence", ConvergenceController, :index
     get "/convergence/stats", ConvergenceController, :stats
 
+    # Domain configuration
+    get "/domains", DomainController, :index
+    get "/domains/:id", DomainController, :show
+    get "/domains/:id/edge-types", DomainController, :edge_types
+
     # Security monitoring
     get "/security/stats", SecurityController, :stats
     get "/security/blocks", SecurityController, :recent_blocks

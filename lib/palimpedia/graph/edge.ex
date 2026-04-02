@@ -37,18 +37,26 @@ defmodule Palimpedia.Graph.Edge do
     metadata: %{}
   ]
 
-  @doc "All valid edge types in the Palimpedia graph vocabulary."
-  def valid_types do
-    [
-      :references,
-      :contradicts,
-      :supports,
-      :derived_from,
-      :related_to,
-      :influences,
-      :precedes,
-      :specializes,
-      :generalizes
-    ]
+  @base_types [
+    :references,
+    :contradicts,
+    :supports,
+    :derived_from,
+    :related_to,
+    :influences,
+    :precedes,
+    :specializes,
+    :generalizes
+  ]
+
+  @doc "All valid edge types in the base Palimpedia graph vocabulary."
+  def valid_types, do: @base_types
+
+  @doc """
+  All valid edge types including domain-specific extensions.
+  Pass a domain ID to include that domain's edge types.
+  """
+  def valid_types_for(domain_id) do
+    Palimpedia.Domain.Config.edge_types_for(domain_id)
   end
 end

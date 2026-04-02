@@ -27,18 +27,14 @@ defmodule Palimpedia.Generation.PromptBuilder do
     }
   end
 
-  defp system_prompt(_opts) do
-    """
-    You are a knowledge synthesis engine for Palimpedia, a generative epistemic network.
-    Your task is to generate a document that bridges a structural gap in the knowledge graph.
+  defp system_prompt(opts) do
+    domain = Keyword.get(opts, :domain)
 
-    Rules:
-    - Every claim must trace to an anchor source or be marked as inferred.
-    - Assign a confidence score (0.0-1.0) to each claim.
-    - Identify relationships to existing nodes using typed edges.
-    - Flag contradictions with existing documents explicitly.
-    - Do not fabricate sources. If no anchor supports a claim, say so.
-    """
+    if domain do
+      Palimpedia.Domain.Config.prompt_template_for(domain)
+    else
+      Palimpedia.Domain.Config.prompt_template_for(:general)
+    end
   end
 
   defp generation_instructions(target_title, _opts) do
