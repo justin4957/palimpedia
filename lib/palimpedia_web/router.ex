@@ -32,6 +32,13 @@ defmodule PalimpediaWeb.Router do
     get "/nodes/:id", ExplorerController, :show_node
   end
 
+  # GraphQL endpoint for researcher access
+  scope "/graphql" do
+    pipe_through :api
+
+    forward "/", Absinthe.Plug, schema: PalimpediaWeb.GraphQL.Schema
+  end
+
   scope "/api", PalimpediaWeb do
     pipe_through :api
 
