@@ -83,5 +83,28 @@ defmodule Palimpedia.Test.MockGraphRepo do
     {:ok, []}
   end
 
+  def find_low_connectivity(min_edges, _opts) do
+    {:ok,
+     [
+       %{node: @generated, degree: 1}
+     ]
+     |> Enum.filter(fn %{degree: d} -> d < min_edges end)}
+  end
+
+  def find_structural_holes(_max_hops, _opts) do
+    {:ok,
+     [
+       %{node_a: @anchor, node_b: @generated, indirect_paths: 3}
+     ]}
+  end
+
+  def coverage_by_type do
+    {:ok,
+     %{
+       "anchor" => %{node_count: 1, edge_count: 2, avg_degree: 2.0},
+       "generated" => %{node_count: 1, edge_count: 1, avg_degree: 1.0}
+     }}
+  end
+
   def delete_all, do: :ok
 end

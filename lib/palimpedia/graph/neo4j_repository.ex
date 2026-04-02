@@ -242,6 +242,83 @@ defmodule Palimpedia.Graph.Neo4jRepository do
   end
 
   @impl true
+  def find_low_connectivity(min_edges, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 100)
+
+    query = """
+    MATCH (n:Document)
+    OPTIONAL MATCH (n)-[r]-()
+    WITH n, count(r) AS degree
+    WHERE degree < $min_edges
+    RETURN n, degree
+    ORDER BY degree ASC
+    LIMIT $limit
+    """
+
+    with {:ok, response} <- execute(query, %{min_edges: min_edges, limit: limit}) do
+      results =
+        Enum.map(response.results, fn %{"n" => neo4j_node, "degree" => degree} ->
+          %{node: neo4j_node_to_struct(neo4j_node), degree: degree}
+        end)
+
+      {:ok, results}
+    end
+  end
+
+  @impl true
+  def find_structural_holes(max_hops \\ 3, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+
+    # Find pairs of nodes that are reachable within max_hops but share no direct edge.
+    # These are structural holes — regions that could benefit from a bridge document.
+    query = """
+    MATCH (a:Document)-[*2..#{max_hops}]-(b:Document)
+    WHERE id(a) < id(b)
+      AND NOT (a)--(b)
+    WITH a, b, count(*) AS path_count
+    ORDER BY path_count DESC
+    LIMIT $limit
+    RETURN a, b, path_count
+    """
+
+    with {:ok, response} <- execute(query, %{limit: limit}) do
+      results =
+        Enum.map(response.results, fn %{"a" => node_a, "b" => node_b, "path_count" => paths} ->
+          %{
+            node_a: neo4j_node_to_struct(node_a),
+            node_b: neo4j_node_to_struct(node_b),
+            indirect_paths: paths
+          }
+        end)
+
+      {:ok, results}
+    end
+  end
+
+  @impl true
+  def coverage_by_type do
+    query = """
+    MATCH (n:Document)
+    OPTIONAL MATCH (n)-[r]-()
+    WITH n.node_type AS node_type, count(DISTINCT n) AS node_count, count(r) AS edge_count
+    RETURN node_type, node_count, edge_count
+    ORDER BY node_count DESC
+    """
+
+    with {:ok, response} <- execute(query) do
+      results =
+        Map.new(response.results, fn %{"node_type" => nt, "node_count" => nc, "edge_count" => ec} ->
+          {nt, %{node_count: nc, edge_count: ec, avg_degree: safe_div(ec, nc)}}
+        end)
+
+      {:ok, results}
+    end
+  end
+
+  defp safe_div(_, 0), do: 0.0
+  defp safe_div(a, b), do: a / b
+
+  @impl true
   def stats do
     query = """
     MATCH (n:Document)
