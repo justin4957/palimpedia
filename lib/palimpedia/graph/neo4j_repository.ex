@@ -314,6 +314,17 @@ defmodule Palimpedia.Graph.Neo4jRepository do
     }
   end
 
+  @node_types %{
+    "anchor" => :anchor,
+    "generated" => :generated,
+    "requested" => :requested,
+    "bridge" => :bridge
+  }
+
+  @edge_type_map Map.new(Edge.valid_types(), fn t ->
+                   {t |> Atom.to_string() |> String.upcase(), t}
+                 end)
+
   defp neo4j_node_to_struct(%Bolt.Sips.Types.Node{} = neo4j_node) do
     props = neo4j_node.properties
 
@@ -321,7 +332,7 @@ defmodule Palimpedia.Graph.Neo4jRepository do
       id: neo4j_node.id,
       title: props["title"],
       content: props["content"],
-      node_type: String.to_existing_atom(props["node_type"]),
+      node_type: Map.get(@node_types, props["node_type"], :generated),
       confidence: props["confidence"] || 0.0,
       provenance: props["provenance"] || [],
       anchor_distance: props["anchor_distance"],
@@ -334,7 +345,7 @@ defmodule Palimpedia.Graph.Neo4jRepository do
       id: rel.id,
       source_id: rel.start,
       target_id: rel.end,
-      edge_type: rel.type |> String.downcase() |> String.to_existing_atom(),
+      edge_type: Map.get(@edge_type_map, rel.type, :related_to),
       confidence: (rel.properties || %{})["confidence"] || 0.0,
       provenance: (rel.properties || %{})["provenance"] || []
     }

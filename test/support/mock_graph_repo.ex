@@ -47,6 +47,11 @@ defmodule Palimpedia.Test.MockGraphRepo do
     {:ok, Enum.take([@anchor, @generated], limit)}
   end
 
+  def search_nodes("", opts) do
+    limit = Keyword.get(opts, :limit, 20)
+    {:ok, Enum.take([@anchor, @generated], limit)}
+  end
+
   def search_nodes(_, _opts), do: {:ok, []}
 
   def insert_node(%Node{} = node) do
