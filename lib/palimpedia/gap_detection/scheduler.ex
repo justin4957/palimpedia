@@ -17,7 +17,7 @@ defmodule Palimpedia.GapDetection.Scheduler do
 
   use GenServer
 
-  alias Palimpedia.GapDetection.Analyzer
+  alias Palimpedia.GapDetection.{Analyzer, GenerationQueue}
 
   require Logger
 
@@ -126,6 +126,9 @@ defmodule Palimpedia.GapDetection.Scheduler do
 
     {:ok, result} = Analyzer.analyze(state.analyzer_opts)
 
+    # Enqueue detected gaps into the generation queue
+    enqueue_gaps(result.gaps)
+
     Logger.info(
       "Scheduled gap analysis complete: #{result.stats.total_gaps} gaps " <>
         "(#{result.stats.structural_holes} holes, #{result.stats.orphans} orphans, " <>
@@ -133,5 +136,17 @@ defmodule Palimpedia.GapDetection.Scheduler do
     )
 
     %{state | latest_result: result, last_run_at: DateTime.utc_now()}
+  end
+
+  defp enqueue_gaps(gaps) do
+    if Process.whereis(GenerationQueue) do
+      case GenerationQueue.enqueue_batch(gaps) do
+        {:ok, entries} ->
+          Logger.info("Enqueued #{length(entries)} gaps into generation queue")
+
+        _ ->
+          :ok
+      end
+    end
   end
 end
