@@ -59,24 +59,28 @@ defmodule PalimpediaWeb.NodeController do
   @doc "POST /api/nodes/request — Tier 1: Request generation of a new document."
   def request_node(conn, %{"title" => title} = params) do
     user_id = Map.get(params, "user_id")
-    node = Node.new_request(title)
 
-    case graph_repo().insert_node(node) do
-      {:ok, inserted} ->
-        # Side effects: trust scoring, queue boost, on-demand evaluation
-        Handler.handle_node_request(title, user_id: user_id)
+    case Handler.handle_node_request(title, user_id: user_id) do
+      {:blocked, reason, message} ->
+        conn |> put_status(429) |> json(%{error: message, reason: reason})
 
-        conn
-        |> put_status(201)
-        |> json(%{
-          data: GraphJSON.node_to_json(inserted),
-          meta: %{tier: 1, status: "queued"}
-        })
+      {:ok, _} ->
+        node = Node.new_request(title)
 
-      {:error, reason} ->
-        conn
-        |> put_status(500)
-        |> json(%{error: "Failed to register node request", detail: inspect(reason)})
+        case graph_repo().insert_node(node) do
+          {:ok, inserted} ->
+            conn
+            |> put_status(201)
+            |> json(%{
+              data: GraphJSON.node_to_json(inserted),
+              meta: %{tier: 1, status: "queued"}
+            })
+
+          {:error, reason} ->
+            conn
+            |> put_status(500)
+            |> json(%{error: "Failed to register node request", detail: inspect(reason)})
+        end
     end
   end
 
@@ -110,6 +114,9 @@ defmodule PalimpediaWeb.NodeController do
             data: GraphJSON.edge_to_json(inserted),
             meta: %{tier: 2, status: "created", exploration_enqueued: true}
           })
+
+        {:blocked, reason, message} ->
+          conn |> put_status(429) |> json(%{error: message, reason: reason})
 
         {:error, reason} ->
           conn
@@ -165,6 +172,9 @@ defmodule PalimpediaWeb.NodeController do
             },
             meta: %{status: "flagged", confidence_review: "triggered"}
           })
+
+        {:blocked, reason, message} ->
+          conn |> put_status(429) |> json(%{error: message, reason: reason})
       end
     else
       _ ->

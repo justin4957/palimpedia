@@ -9,6 +9,7 @@ defmodule Palimpedia.Interaction.Handler do
   """
 
   alias Palimpedia.Interaction.{UserTrust, Convergence}
+  alias Palimpedia.Security.AntiPoisoning
   alias Palimpedia.GapDetection.GenerationQueue
   alias Palimpedia.Generation.OnDemand
   alias Palimpedia.Confidence.{Contradiction, Updater}
@@ -26,6 +27,13 @@ defmodule Palimpedia.Interaction.Handler do
   """
   def handle_node_request(title, opts \\ []) do
     user_id = Keyword.get(opts, :user_id)
+
+    with :ok <- security_check(user_id, :node_request, title) do
+      handle_node_request_inner(title, user_id, opts)
+    end
+  end
+
+  defp handle_node_request_inner(title, user_id, _opts) do
     record_trust(user_id, :node_request)
 
     # Record convergence signal
@@ -54,30 +62,29 @@ defmodule Palimpedia.Interaction.Handler do
     user_id = Keyword.get(opts, :user_id)
     confidence = Keyword.get(opts, :confidence, 0.5)
     description = Keyword.get(opts, :description)
+    content = description || "#{edge_type}"
 
-    record_trust(user_id, :edge_assertion)
+    with :ok <- security_check(user_id, :edge_assertion, content) do
+      record_trust(user_id, :edge_assertion)
 
-    graph_repo = Keyword.get(opts, :graph_repo, graph_repository())
+      graph_repo = Keyword.get(opts, :graph_repo, graph_repository())
 
-    # Create edge
-    edge = %Edge{
-      source_id: source_id,
-      target_id: target_id,
-      edge_type: edge_type,
-      confidence: confidence,
-      provenance: if(user_id, do: ["user:#{user_id}"], else: [])
-    }
+      edge = %Edge{
+        source_id: source_id,
+        target_id: target_id,
+        edge_type: edge_type,
+        confidence: confidence,
+        provenance: if(user_id, do: ["user:#{user_id}"], else: [])
+      }
 
-    # Record convergence signal for the relationship
-    topic = description || "#{source_id} #{edge_type} #{target_id}"
-    record_convergence(topic, :edge_assertion, user_id)
+      topic = description || "#{source_id} #{edge_type} #{target_id}"
+      record_convergence(topic, :edge_assertion, user_id)
 
-    edge_result = graph_repo.insert_edge(edge)
+      edge_result = graph_repo.insert_edge(edge)
+      enqueue_relationship_exploration(source_id, target_id, edge_type, description)
 
-    # Enqueue generation exploring the relationship
-    enqueue_relationship_exploration(source_id, target_id, edge_type, description)
-
-    edge_result
+      edge_result
+    end
   end
 
   @doc """
@@ -93,23 +100,31 @@ defmodule Palimpedia.Interaction.Handler do
     severity = Keyword.get(opts, :severity, :medium)
     graph_repo = Keyword.get(opts, :graph_repo, graph_repository())
 
-    record_trust(user_id, :contradiction_flag)
+    with :ok <- security_check(user_id, :contradiction_flag, description) do
+      record_trust(user_id, :contradiction_flag)
 
-    # Create contradiction
-    result =
-      Contradiction.flag(node_a_id, node_b_id, description,
-        severity: severity,
-        flagged_by: :user
-      )
+      result =
+        Contradiction.flag(node_a_id, node_b_id, description,
+          severity: severity,
+          flagged_by: :user
+        )
 
-    # Trigger confidence review for both nodes' neighborhoods
-    trigger_confidence_review(node_a_id, graph_repo)
-    trigger_confidence_review(node_b_id, graph_repo)
+      trigger_confidence_review(node_a_id, graph_repo)
+      trigger_confidence_review(node_b_id, graph_repo)
 
-    result
+      result
+    end
   end
 
   # --- Private ---
+
+  defp security_check(user_id, tier, content) do
+    if Process.whereis(AntiPoisoning) do
+      AntiPoisoning.check(user_id, tier, content)
+    else
+      :ok
+    end
+  end
 
   defp record_convergence(topic, tier, user_id) do
     if Process.whereis(Convergence) do

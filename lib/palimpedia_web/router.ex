@@ -45,6 +45,10 @@ defmodule PalimpediaWeb.Router do
     get "/convergence", ConvergenceController, :index
     get "/convergence/stats", ConvergenceController, :stats
 
+    # Security monitoring
+    get "/security/stats", SecurityController, :stats
+    get "/security/blocks", SecurityController, :recent_blocks
+
     # On-demand generation
     get "/generate/evaluate", OnDemandController, :evaluate
     get "/generate/status", OnDemandController, :status
