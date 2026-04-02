@@ -4,6 +4,7 @@ defmodule Palimpedia.Federation.Sync do
   """
 
   alias Palimpedia.Federation.{Protocol, InstanceRegistry}
+  alias Palimpedia.Deployment.Config, as: DeployConfig
   alias Palimpedia.Graph.Edge
 
   require Logger
@@ -30,15 +31,25 @@ defmodule Palimpedia.Federation.Sync do
 
     case graph_repo.subgraph(center_node_id, hops) do
       {:ok, nodes, edges} ->
-        payload = Protocol.serialize_subgraph(nodes, edges)
+        # Filter out proprietary nodes for selective federation
+        public_nodes = Enum.reject(nodes, &DeployConfig.proprietary?/1)
+        public_node_ids = MapSet.new(Enum.map(public_nodes, & &1.id))
+
+        public_edges =
+          Enum.filter(edges, fn edge ->
+            MapSet.member?(public_node_ids, edge.source_id) and
+              MapSet.member?(public_node_ids, edge.target_id)
+          end)
+
+        payload = Protocol.serialize_subgraph(public_nodes, public_edges)
         instance_id = InstanceRegistry.local_instance_id()
 
         case Protocol.encode(:subgraph_share, payload, instance_id) do
           {:ok, json} ->
             {:ok,
              %{
-               nodes_exported: length(nodes),
-               edges_exported: length(edges),
+               nodes_exported: length(public_nodes),
+               edges_exported: length(public_edges),
                message: json
              }}
 
