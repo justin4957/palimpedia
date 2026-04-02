@@ -80,6 +80,14 @@ defmodule PalimpediaWeb.Router do
     post "/reviews/:id/reject", ReviewController, :reject
     post "/reviews/:id/flag", ReviewController, :flag
 
+    # Coverage map & epistemic index
+    get "/coverage", CoverageController, :index
+    get "/coverage/density", CoverageController, :density
+    get "/coverage/confidence", CoverageController, :confidence
+    get "/coverage/blind-spots", CoverageController, :blind_spots
+    get "/coverage/gaps", CoverageController, :gaps
+    get "/coverage/epistemic-index", CoverageController, :epistemic_index
+
     # Graph operations
     get "/graph/subgraph/:id", GraphController, :subgraph
     get "/graph/stats", GraphController, :stats
